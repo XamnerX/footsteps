@@ -32,8 +32,8 @@ let footprints = [];
 function setup() {
   socket = io();
 
-  createCanvas(400, 400);
-  // createCanvas(windowWidth, windowHeight);
+  // createCanvas(400, 400);
+  createCanvas(windowWidth, windowHeight);
   rectMode(CORNER);
   angleMode(DEGREES);
 
@@ -296,7 +296,7 @@ function deviceTurnedHandler(event) {
   leftToRight = event.gamma; // gamma: left to right
 }
 
-// function windowResized() {
-//   resizeCanvas(windowWidth, windowHeight);
-// }
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+}
 
