@@ -194,7 +194,7 @@ function drawFootprint(f) {
     scale(-1, 1);
   }
 
-  scale(0.4);
+  scale(1);
 
   // fill(rightFoot ? color(255, 0, 0) : color(0, 255, 0));
   // noStroke();
