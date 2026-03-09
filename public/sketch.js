@@ -29,6 +29,10 @@ let rightFoot = true;
 
 let footprints = [];
 
+let lastStepTime=0;
+let stepCooldown=100;//ms
+const MAX_FOOTPRINTS = 120;
+
 function setup() {
   socket = io();
 
@@ -39,6 +43,8 @@ function setup() {
 
   cX = width / 2;
   cY = height / 2;
+  curx = cX;
+  cury = cY;
 
   //----------
   //the bit between the two comment lines could be move to a three.js sketch except you'd need to create a button there
@@ -59,7 +65,7 @@ function setup() {
   background(255);
 
 socket.on("step", (data) => {
-  console.log("收到网络脚印", data);
+  // console.log("收到网络脚印", data);
 
   footprints.push({
     x: data.x,
@@ -105,8 +111,9 @@ function draw() {
   let magnitude = dist(curx, cury, cX, cY);
 
   // ---------- ③ 是否走了一步 ----------
-  if (magnitude > stepDistance) {
+  if (magnitude > stepDistance&&millis()-lastStepTime>stepCooldown) {
     makeStep(dx, dy);
+    lastStepTime=millis();
   }
 
   for (let f of footprints) {
@@ -119,10 +126,11 @@ function draw() {
   // 把看不见的脚印清掉
   // footprints = footprints.filter(f => f.alpha > 0);
 
-  footprints = footprints.filter(
-  f => f.alpha > 0 || f.isCurrent
-);
+footprints = footprints.filter(f => f.alpha > 0 || f.isCurrent);
 
+if (footprints.length > MAX_FOOTPRINTS) {
+  footprints.splice(0, footprints.length - MAX_FOOTPRINTS);
+}
 
   // ---------- ④ Debug UI ----------
   // drawDebug();
@@ -142,16 +150,7 @@ function makeStep(dx, dy) {
     f.isCurrent = false;
   }
 
-  // 3️⃣ 存脚印
-  footprints.push({
-    x: curx,
-    y: cury,
-    angle: angle,
-    rightFoot: rightFoot,
-    alpha: 255,
-    isCurrent: true,
-    rotOffset: random(-10, 10)
-  });
+  let rotOffset=random(-10,10);
 
   let stepData={
     x: curx,
@@ -160,17 +159,24 @@ function makeStep(dx, dy) {
     rightFoot: rightFoot,
     // alpha: 255,
     // isCurrent: true,
-    rotOffset: random(-10, 10)
-  }
+    rotOffset: rotOffset
+  };
+
+  // 3️⃣ 存脚印
+  footprints.push({
+    x: curx,
+    y: cury,
+    angle: angle,
+    rightFoot: rightFoot,
+    alpha: 255,
+    isCurrent: true
+  });
   
   socket.emit("step",stepData);
 
   // 4️⃣ 切换左右脚
   rightFoot = !rightFoot;
 
-  
-
-  
 }
 
 function drawFootprint(f) {
@@ -194,12 +200,12 @@ function drawFootprint(f) {
     scale(-1, 1);
   }
 
-  scale(1);
+  scale(0.4);
 
   // fill(rightFoot ? color(255, 0, 0) : color(0, 255, 0));
-  // noStroke();
+  noStroke();
   // stroke(170,187,237);
-  strokeWeight(2);
+  // strokeWeight(2);
   fill(170,187,237, f.alpha);
   // fill(118,153,191, f.alpha);
   // ellipse(0, 0, 5, 3);
