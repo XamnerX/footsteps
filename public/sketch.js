@@ -36,8 +36,8 @@ const MAX_FOOTPRINTS = 120;
 function setup() {
   socket = io();
 
-  // createCanvas(400, 400);
-  createCanvas(windowWidth, windowHeight);
+  createCanvas(400, 400);
+  // createCanvas(windowWidth, windowHeight);
   rectMode(CORNER);
   angleMode(DEGREES);
 
@@ -142,7 +142,8 @@ function makeStep(dx, dy) {
   cury += dy;
 
   // 2️⃣ 方向
-  let angle = atan2(dy, dx);
+  // let angle = atan2(dy, dx);
+  let angle = degrees(Math.atan2(dy, dx));
   // let angle = degrees(atan2(dy, dx));
 
   // ⭐ 之前的“当前脚印”不再是 current
@@ -302,7 +303,7 @@ function deviceTurnedHandler(event) {
   leftToRight = event.gamma; // gamma: left to right
 }
 
-function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
-}
+// function windowResized() {
+//   resizeCanvas(windowWidth, windowHeight);
+// }
 
