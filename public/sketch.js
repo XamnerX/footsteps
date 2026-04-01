@@ -411,6 +411,11 @@ function isIOSLike() {
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
+function isIOSLike() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 function getTiltInput() {
   let x = leftToRight;   // gamma
   let y = frontToBack;   // beta
@@ -425,7 +430,7 @@ function getTiltInput() {
 
   let result;
 
-  // 根据屏幕旋转角度修正输入方向
+  // 先按屏幕方向修正
   if (angle === 90) {
     result = { x: -y, y: x };
   } else if (angle === -90 || angle === 270) {
@@ -436,10 +441,12 @@ function getTiltInput() {
     result = { x, y };
   }
 
-  // iOS 设备额外反向修正
+  // iPad / iPhone 再额外旋转一次
   if (isIOSLike()) {
-    result.x *= -1;
-    result.y *= -1;
+    result = {
+      x: -result.y,
+      y: result.x
+    };
   }
 
   return result;
