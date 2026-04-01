@@ -146,12 +146,8 @@ function makeStep(dx, dy) {
   let angle = degrees(Math.atan2(dy, dx));
   // let angle = degrees(atan2(dy, dx));
 
-  // ⭐ 之前的“当前脚印”不再是 current
-  for (let f of footprints) {
-    f.isCurrent = false;
-  }
-
   let rotOffset=random(-10,10);
+
 
   let stepData={
     x: curx,
@@ -171,6 +167,16 @@ function makeStep(dx, dy) {
   });
   
   socket.emit("step",stepData);
+
+  // // ⭐ 之前的“当前脚印”不再是 current
+  // for (let f of footprints) {
+  //   f.isCurrent = false;
+  // }
+
+  // 先全部取消 current
+  for (let f of footprints) {
+    f.isCurrent = false;
+  }
 
   // 4️⃣ 切换左右脚
   rightFoot = !rightFoot;
