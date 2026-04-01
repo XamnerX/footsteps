@@ -406,10 +406,6 @@ function deviceTurnedHandler(event) {
 }
 
 
-function isIOSLike() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-}
 
 function isIOSLike() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -444,8 +440,8 @@ function getTiltInput() {
   // iPad / iPhone 再额外旋转一次
   if (isIOSLike()) {
     result = {
-      x: -result.y,
-      y: result.x
+      x: result.y,
+      y: -result.x
     };
   }
 
