@@ -38,7 +38,7 @@ This sketch explores the feeling of multiple people walking around on snow and l
 - Internet connection for the online shared version
 
 ## Screenshots / Media
-*(Insert screenshots or documentation images here)*
+![Screenshot](screenshot.png)
 
 ## Credits / Acknowledgements
 Created by Haiyi Xiao.
