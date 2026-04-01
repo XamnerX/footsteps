@@ -9,11 +9,15 @@ This sketch visualizes 雪地中的脚步
  
 How to Use: 
 - 在移动端设备打开链接：https://footsteps-9ydb.onrender.com
+- 如果你使用的是苹果设备，请在画布最下面点击permission进行授权
 - 倾斜设备控制脚步行走
  
 Acknowledgements: 
 Inspired by 
------------------------------------------------------- 
+------------------------------------------------------
+
+gpt
+帧率优化、对不同设备进行屏幕方向修正、加入校准开关
 */
 
 
@@ -52,6 +56,9 @@ let footprints = [];
 let lastStepTime=0;
 let stepCooldown=100;//ms
 const MAX_FOOTPRINTS = 100;
+
+let invertX = false;
+let invertY = false;
 
 function setup() {
   socket = io();
@@ -110,20 +117,36 @@ function draw() {
   // rect(0, 0, width, height);
 
   // ---------- ① 根据手机输入更新目标位置 ----------
-  if (frontToBack > 40) {
-    // down
+  // if (frontToBack > 40) {
+  //   // down
+  //   cY += 1;
+  // } else if (frontToBack < 0) {
+  //   // up
+  //   cY += -1;
+  // }
+
+  // if (leftToRight > 20) {
+  //   // Right
+  //   cX += 1;
+  // } else if (leftToRight < -20) {
+  //   // Left
+  //   cX += -1;
+  // }
+
+  let tilt = getTiltInput();
+  let moveX = tilt.x;
+  let moveY = tilt.y;
+
+  if (moveY > 40) {
     cY += 1;
-  } else if (frontToBack < 0) {
-    // up
-    cY += -1;
+  } else if (moveY < 0) {
+    cY -= 1;
   }
 
-  if (leftToRight > 20) {
-    // Right
+  if (moveX > 20) {
     cX += 1;
-  } else if (leftToRight < -20) {
-    // Left
-    cX += -1;
+  } else if (moveX < -20) {
+    cX -= 1;
   }
 
   let margin = 20;
@@ -380,6 +403,46 @@ function deviceTurnedHandler(event) {
   rotateDegrees = event.alpha; // alpha: rotation around z-axis
   frontToBack = event.beta; // beta: front back motion
   leftToRight = event.gamma; // gamma: left to right
+}
+
+
+function isIOSLike() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function getTiltInput() {
+  let x = leftToRight;   // gamma
+  let y = frontToBack;   // beta
+
+  let angle = 0;
+
+  if (screen.orientation && typeof screen.orientation.angle === "number") {
+    angle = screen.orientation.angle;
+  } else if (typeof window.orientation === "number") {
+    angle = window.orientation;
+  }
+
+  let result;
+
+  // 根据屏幕旋转角度修正输入方向
+  if (angle === 90) {
+    result = { x: -y, y: x };
+  } else if (angle === -90 || angle === 270) {
+    result = { x: y, y: -x };
+  } else if (angle === 180) {
+    result = { x: -x, y: -y };
+  } else {
+    result = { x, y };
+  }
+
+  // iOS 设备额外反向修正
+  if (isIOSLike()) {
+    result.x *= -1;
+    result.y *= -1;
+  }
+
+  return result;
 }
 
 function windowResized() {
