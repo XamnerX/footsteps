@@ -1,192 +1,187 @@
-/* 
------------------------------------------------------- 
-Sketch 02 – Footsteps 
-Author: Haiyi Xiao 
-Date: Feb 2026 
- 
-Description: 
-This sketch visualizes 雪地中的脚步 
- 
-How to Use: 
-- 在移动端设备打开链接：https://footsteps-9ydb.onrender.com
-- 如果你使用的是苹果设备，请在画布最下面点击permission进行授权
-- 倾斜设备控制脚步行走
- 
-Acknowledgements: 
-Inspired by 
-------------------------------------------------------
-
-gpt
-帧率优化、对不同设备进行屏幕方向修正、加入校准开关
-*/
-
-
-
 let socket;
+let permissionButton;
 
-//global variables
-let askButton;
+// Device orientation values
+let frontToBack = 0; // beta
+let leftToRight = 0; // gamma
 
-// device motion
-let accX = 0;
-let accY = 0;
-let accZ = 0;
-let rrateX = 0;
-let rrateY = 0;
-let rrateZ = 0;
+// Current target position and current footprint position
+let targetX;
+let targetY;
+let currentX;
+let currentY;
 
-// device orientation
-let rotateDegrees = 0;
-let frontToBack = 0; // up and down
-let leftToRight = 0; // left and right
-
-let cX;
-let cY;
-
-// let averagingAmt = 0.1;//change this to 1 or 0.9 to see it keep up with the mouse
-let curx = 0.0;
-let cury = 0.0;
-
+// Footstep settings
 let stepDistance = 15;
-
 let rightFoot = true;
-
 let footprints = [];
 
-let lastStepTime=0;
-let stepCooldown=100;//ms
-const MAX_FOOTPRINTS = 100;
+// Timing and performance settings
+let lastStepTime = 0;
+let stepCooldown = 100;
+const maxFootprints = 100;
 
-let invertX = false;
-let invertY = false;
+// Visual / movement settings
+const edgeMargin = 20;
+const fadeSpeed = 3;
 
 function setup() {
   socket = io();
 
-  // createCanvas(400, 400);
   createCanvas(windowWidth, windowHeight);
   rectMode(CORNER);
   angleMode(DEGREES);
 
-  cX = width / 2;
-  cY = height / 2;
-  curx = cX;
-  cury = cY;
+  targetX = width / 2;
+  targetY = height / 2;
+  currentX = targetX;
+  currentY = targetY;
 
-  //----------
-  //the bit between the two comment lines could be move to a three.js sketch except you'd need to create a button there
-  if (
-    typeof DeviceMotionEvent.requestPermission === "function" &&
-    typeof DeviceOrientationEvent.requestPermission === "function"
-  ) {
-    // iOS 13+
-    askButton = createButton("Permission"); //p5 create button
-    askButton.mousePressed(handlePermissionButtonPressed); //p5 listen to mousePressed event
-  } else {
-    //if there is a device that doesn't require permission
-    window.addEventListener("devicemotion", deviceMotionHandler, true);
-    window.addEventListener("deviceorientation", deviceTurnedHandler, true);
-  }
+  setupMotionPermission();
+  setupSocketEvents();
 
-  //----------
   background(255);
-
-socket.on("step", (data) => {
-  // console.log("收到网络脚印", data);
-
-  footprints.push({
-    x: data.x,
-    y: data.y,
-    angle: data.angle,
-    rightFoot: data.rightFoot,
-    rotOffset: data.rotOffset || 0,
-    alpha: 255,
-    // isCurrent: false
-    ownerId: data.ownerId || "unknown"
-  });
-});
-
 }
 
-//we are using p5.js to visualise this movement data
 function draw() {
   background(255);
 
-  // noStroke();
-  // fill(239,237,248, 20); // 低 alpha
-  // rect(0, 0, width, height);
+  updateTargetPositionFromTilt();
+  updateFootsteps();
+  drawAndFadeFootprints();
+  trimFootprints();
+}
 
-  // ---------- ① 根据手机输入更新目标位置 ----------
-  // if (frontToBack > 40) {
-  //   // down
-  //   cY += 1;
-  // } else if (frontToBack < 0) {
-  //   // up
-  //   cY += -1;
-  // }
+/* --------------------------------------------------
+   Setup
+-------------------------------------------------- */
 
-  // if (leftToRight > 20) {
-  //   // Right
-  //   cX += 1;
-  // } else if (leftToRight < -20) {
-  //   // Left
-  //   cX += -1;
-  // }
+function setupMotionPermission() {
+  const needsPermission =
+    typeof DeviceMotionEvent.requestPermission === "function" &&
+    typeof DeviceOrientationEvent.requestPermission === "function";
 
-  let tilt = getTiltInput();
-  let moveX = tilt.x;
-  let moveY = tilt.y;
+  if (needsPermission) {
+    permissionButton = createButton("Permission");
+    permissionButton.mousePressed(handlePermissionButtonPressed);
+  } else {
+    enableMotionListeners();
+  }
+}
+
+function setupSocketEvents() {
+  socket.on("step", (data) => {
+    footprints.push({
+      nx: data.nx,
+      ny: data.ny,
+      angle: data.angle,
+      rightFoot: data.rightFoot,
+      rotOffset: data.rotOffset || 0,
+      alpha: 255,
+      ownerId: data.ownerId || "unknown"
+    });
+  });
+}
+
+function enableMotionListeners() {
+  window.addEventListener("deviceorientation", deviceTurnedHandler, true);
+}
+
+/* --------------------------------------------------
+   Main update logic
+-------------------------------------------------- */
+
+function updateTargetPositionFromTilt() {
+  const tilt = getTiltInput();
+  const moveX = tilt.x;
+  const moveY = tilt.y;
 
   if (moveY > 40) {
-    cY += 1;
+    targetY += 1;
   } else if (moveY < 0) {
-    cY -= 1;
+    targetY -= 1;
   }
 
   if (moveX > 20) {
-    cX += 1;
+    targetX += 1;
   } else if (moveX < -20) {
-    cX -= 1;
+    targetX -= 1;
   }
 
-  let margin = 20;
-  cX = constrain(cX, margin, width - margin);
-  cY = constrain(cY, margin, height - margin);
+  targetX = constrain(targetX, edgeMargin, width - edgeMargin);
+  targetY = constrain(targetY, edgeMargin, height - edgeMargin);
+}
 
-  // ---------- ② 计算位移 ----------
-  let dx = cX - curx;
-  let dy = cY - cury;
-  let magnitude = dist(curx, cury, cX, cY);
+function updateFootsteps() {
+  const dx = targetX - currentX;
+  const dy = targetY - currentY;
+  const magnitude = dist(currentX, currentY, targetX, targetY);
 
-  // ---------- ③ 是否走了一步 ----------
-  if (magnitude > stepDistance&&millis()-lastStepTime>stepCooldown) {
+  if (magnitude > stepDistance && millis() - lastStepTime > stepCooldown) {
     makeStep(dx, dy);
-    lastStepTime=millis();
+    lastStepTime = millis();
   }
+}
 
-  // for (let f of footprints) {
-  //   drawFootprint(f);
-  //   if (!f.isCurrent) {
-  //     f.alpha -= 2; // ❄️ 被雪覆盖⭐ 消失速度，调这个
-  //   }
-  // }
-
-  // for (let i = 0; i < footprints.length; i++) {
-  //   let f = footprints[i];
-  //   drawFootprint(f);
-
-  //   // 只保留最后两只脚印不消失
-  //   if (i < footprints.length - 2) {
-  //     f.alpha -= 2;
-  //   }
-  // }
-
-  // ① 先统计：每个 owner 最近两只脚印是哪些
-  let lastTwoIndexSet = new Set();
-  let ownerToIndices = {};
+function drawAndFadeFootprints() {
+  const lastTwoIndexSet = getLastTwoFootprintsPerOwner();
 
   for (let i = 0; i < footprints.length; i++) {
-    let ownerId = footprints[i].ownerId || "unknown";
+    const footprint = footprints[i];
+    drawFootprint(footprint);
+
+    // Keep the most recent two footprints for each user visible.
+    // Older footprints gradually fade out.
+    if (!lastTwoIndexSet.has(i)) {
+      footprint.alpha -= fadeSpeed;
+    }
+  }
+}
+
+function trimFootprints() {
+  footprints = footprints.filter((footprint) => footprint.alpha > 0);
+
+  if (footprints.length > maxFootprints) {
+    footprints.splice(0, footprints.length - maxFootprints);
+  }
+}
+
+/* --------------------------------------------------
+   Footstep logic
+-------------------------------------------------- */
+
+function makeStep(dx, dy) {
+  currentX += dx;
+  currentY += dy;
+
+  currentX = constrain(currentX, edgeMargin, width - edgeMargin);
+  currentY = constrain(currentY, edgeMargin, height - edgeMargin);
+
+  const angle = degrees(Math.atan2(dy, dx));
+  const rotOffset = random(-10, 10);
+
+  const stepData = {
+    nx: currentX / width,
+    ny: currentY / height,
+    angle: angle,
+    rightFoot: rightFoot,
+    rotOffset: rotOffset,
+    alpha: 255,
+    ownerId: socket.id
+  };
+
+  footprints.push(stepData);
+  socket.emit("step", stepData);
+
+  rightFoot = !rightFoot;
+}
+
+function getLastTwoFootprintsPerOwner() {
+  const ownerToIndices = {};
+  const lastTwoIndexSet = new Set();
+
+  for (let i = 0; i < footprints.length; i++) {
+    const ownerId = footprints[i].ownerId || "unknown";
 
     if (!ownerToIndices[ownerId]) {
       ownerToIndices[ownerId] = [];
@@ -194,250 +189,117 @@ function draw() {
 
     ownerToIndices[ownerId].push(i);
 
-    // 只保留最后两个索引，避免数组无限变长
     if (ownerToIndices[ownerId].length > 2) {
       ownerToIndices[ownerId].shift();
     }
   }
 
-  for (let ownerId in ownerToIndices) {
-    for (let idx of ownerToIndices[ownerId]) {
-      lastTwoIndexSet.add(idx);
+  for (const ownerId in ownerToIndices) {
+    for (const index of ownerToIndices[ownerId]) {
+      lastTwoIndexSet.add(index);
     }
   }
 
-  // ② 再绘制和淡出
-  for (let i = 0; i < footprints.length; i++) {
-    let f = footprints[i];
-    drawFootprint(f);
-
-    if (!lastTwoIndexSet.has(i)) {
-      f.alpha -= 3;
-    }
-  }
-
-  // ③ 清理看不见的脚印
-  footprints = footprints.filter(f => f.alpha > 0);
-
-  if (footprints.length > MAX_FOOTPRINTS) {
-    footprints.splice(0, footprints.length - MAX_FOOTPRINTS);
-  }
-
-  // ---------- ④ Debug UI ----------
-  // drawDebug();
+  return lastTwoIndexSet;
 }
 
-function makeStep(dx, dy) {
-  // 1️⃣ 更新“当前脚印参考位置”
-  curx += dx;
-  cury += dy;
+/* --------------------------------------------------
+   Drawing
+-------------------------------------------------- */
 
-  let margin = 20;
-  curx = constrain(curx, margin, width - margin);
-  cury = constrain(cury, margin, height - margin);
+function drawFootprint(footprint) {
+  const offset = footprint.rightFoot ? -3 : 3;
 
-  // 2️⃣ 方向
-  // let angle = atan2(dy, dx);
-  let angle = degrees(Math.atan2(dy, dx));
-  // let angle = degrees(atan2(dy, dx));
-
-  let rotOffset=random(-10,10);
-
-
-  let stepData={
-    x: curx,
-    y: cury,
-    angle: angle,
-    rightFoot: rightFoot,
-    // alpha: 255,
-    // isCurrent: true,
-    rotOffset: rotOffset,
-    alpha: 255,
-    ownerId: socket.id
-  };
-
-  // // 3️⃣ 存脚印
-  // footprints.push({
-  //   ...stepData,
-  //   alpha: 255,
-  //   // isCurrent: true
-  // });
-
-  footprints.push(stepData);
-  
-  socket.emit("step",stepData);
-
-  // // ⭐ 之前的“当前脚印”不再是 current
-  // for (let f of footprints) {
-  //   f.isCurrent = false;
-  // }
-
-  // // 先全部取消 current
-  // for (let f of footprints) {
-  //   f.isCurrent = false;
-  // }
-
-  // 4️⃣ 切换左右脚
-  rightFoot = !rightFoot;
-
-}
-
-function drawFootprint(f) {
-  let offset;
-  if (f.rightFoot) {
-    offset = -3;
-    // scale(0.4,-0.4);
-  } else {
-    offset = 3;
-    // scale(-0.4, -0.4);
-  }
+  // Convert normalized coordinates back into local screen space.
+  // This keeps positions consistent across different screen sizes.
+  const px = footprint.nx * width;
+  const py = footprint.ny * height;
 
   push();
-  translate(f.x, f.y);
-  rotate(f.angle + (f.rotOffset || 0));
+  translate(px, py);
+  rotate(footprint.angle + (footprint.rotOffset || 0));
   rotate(90);
-
   translate(offset, 0);
 
-  if (!f.rightFoot) {
+  if (!footprint.rightFoot) {
     scale(-1, 1);
   }
 
+  // Footprint size stays fixed.
+  // Only position is normalized across devices.
   scale(0.4);
-
-  // fill(rightFoot ? color(255, 0, 0) : color(0, 255, 0));
   noStroke();
-  // stroke(170,187,237);
-  // strokeWeight(2);
-  fill(170,187,237, f.alpha);
-  // fill(118,153,191, f.alpha);
-  // ellipse(0, 0, 5, 3);
+  fill(170, 187, 237, footprint.alpha);
 
-  push();
   beginShape();
-  vertex(-6, 0); // heel
-  vertex(-2, -8); // left side
-  vertex(2, -8); // toe left
-  vertex(6, -1); // toe
-  vertex(4, 14); // toe right
-  vertex(-2, 14); // right side
+  vertex(-6, 0);
+  vertex(-2, -8);
+  vertex(2, -8);
+  vertex(6, -1);
+  vertex(4, 14);
+  vertex(-2, 14);
   endShape(CLOSE);
-  pop();
 
   pop();
 }
 
-// function drawDebug() {
-//   rectMode(CORNER);
-//   fill(255);
-//   noStroke();
-//   rect(0, 0, width / 2 - 35, height / 2);
-
-//   //Debug text
-//   fill(0);
-//   textSize(15);
-
-//   text("acceleration: ", 10, 10);
-//   text(
-//     accX.toFixed(2) + ", " + accY.toFixed(2) + ", " + accZ.toFixed(2),
-//     10,
-//     40
-//   );
-
-//   text("rotation rate: ", 10, 80);
-//   text(
-//     rrateX.toFixed(2) + ", " + rrateY.toFixed(2) + ", " + rrateZ.toFixed(2),
-//     10,
-//     110
-//   );
-
-//   text("device orientation: ", 10, 150);
-//   text(
-//     rotateDegrees.toFixed(2) +
-//       ", " +
-//       leftToRight.toFixed(2) +
-//       ", " +
-//       frontToBack.toFixed(2),
-//     10,
-//     180
-//   );
-// }
-
-//Everything below here you could move to a three.js or other javascript sketch
+/* --------------------------------------------------
+   Motion input
+-------------------------------------------------- */
 
 function handlePermissionButtonPressed() {
-  DeviceMotionEvent.requestPermission().then((response) => {
-    // alert(response);//quick way to debug response result on mobile, you get a mini pop-up
-    if (response === "granted") {
-      window.addEventListener("devicemotion", deviceMotionHandler, true);
-    }
-  });
-
-  DeviceOrientationEvent.requestPermission()
+  DeviceMotionEvent.requestPermission()
     .then((response) => {
       if (response === "granted") {
-        // alert(response);//quick way to debug response result on mobile, you get a mini pop-up
-        window.addEventListener("deviceorientation", deviceTurnedHandler, true);
+        return DeviceOrientationEvent.requestPermission();
+      }
+    })
+    .then((response) => {
+      if (response === "granted") {
+        enableMotionListeners();
       }
     })
     .catch(console.error);
 }
 
-//AVERAGE YOUR DATA!!!
-//Microphone input from last term....
-
-// https://developer.mozilla.org/en-US/docs/Web/API/Window/devicemotion_event
-function deviceMotionHandler(event) {
-  accX = event.acceleration.x;
-  accY = event.acceleration.y;
-  accZ = event.acceleration.z;
-
-  rrateZ = event.rotationRate.alpha; //alpha: rotation around z-axis
-  rrateX = event.rotationRate.beta; //rotating about its X axis; that is, front to back
-  rrateY = event.rotationRate.gamma; //rotating about its Y axis: left to right
-}
-
-//https://developer.mozilla.org/en-US/docs/Web/API/Window/deviceorientation_event
 function deviceTurnedHandler(event) {
-  //degrees 0 - 365
-  rotateDegrees = event.alpha; // alpha: rotation around z-axis
-  frontToBack = event.beta; // beta: front back motion
-  leftToRight = event.gamma; // gamma: left to right
+  frontToBack = event.beta;
+  leftToRight = event.gamma;
 }
-
-
 
 function isIOSLike() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
 }
 
 function getTiltInput() {
-  let x = leftToRight;   // gamma
-  let y = frontToBack;   // beta
+  const x = leftToRight;
+  const y = frontToBack;
 
-  let angle = 0;
+  let screenAngle = 0;
 
   if (screen.orientation && typeof screen.orientation.angle === "number") {
-    angle = screen.orientation.angle;
+    screenAngle = screen.orientation.angle;
   } else if (typeof window.orientation === "number") {
-    angle = window.orientation;
+    screenAngle = window.orientation;
   }
 
   let result;
 
-  // 先按屏幕方向修正
-  if (angle === 90) {
+  // Correct the input according to the current screen orientation.
+  if (screenAngle === 90) {
     result = { x: -y, y: x };
-  } else if (angle === -90 || angle === 270) {
+  } else if (screenAngle === -90 || screenAngle === 270) {
     result = { x: y, y: -x };
-  } else if (angle === 180) {
+  } else if (screenAngle === 180) {
     result = { x: -x, y: -y };
   } else {
     result = { x, y };
   }
 
-  // iPad / iPhone 再额外旋转一次
+  // Additional correction for iOS / iPadOS devices.
   if (isIOSLike()) {
     result = {
       x: result.y,
@@ -448,7 +310,15 @@ function getTiltInput() {
   return result;
 }
 
+/* --------------------------------------------------
+   Responsive canvas
+-------------------------------------------------- */
+
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
-}
 
+  targetX = constrain(targetX, edgeMargin, width - edgeMargin);
+  targetY = constrain(targetY, edgeMargin, height - edgeMargin);
+  currentX = constrain(currentX, edgeMargin, width - edgeMargin);
+  currentY = constrain(currentY, edgeMargin, height - edgeMargin);
+}
