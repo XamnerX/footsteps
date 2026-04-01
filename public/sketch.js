@@ -31,7 +31,7 @@ let footprints = [];
 
 let lastStepTime=0;
 let stepCooldown=100;//ms
-const MAX_FOOTPRINTS = 120;
+const MAX_FOOTPRINTS = 100;
 
 function setup() {
   socket = io();
@@ -75,6 +75,7 @@ socket.on("step", (data) => {
     rotOffset: data.rotOffset || 0,
     alpha: 255,
     // isCurrent: false
+    ownerId: data.ownerId || "unknown"
   });
 });
 
@@ -123,20 +124,53 @@ function draw() {
   //   }
   // }
 
+  // for (let i = 0; i < footprints.length; i++) {
+  //   let f = footprints[i];
+  //   drawFootprint(f);
+
+  //   // 只保留最后两只脚印不消失
+  //   if (i < footprints.length - 2) {
+  //     f.alpha -= 2;
+  //   }
+  // }
+
+  // ① 先统计：每个 owner 最近两只脚印是哪些
+  let lastTwoIndexSet = new Set();
+  let ownerToIndices = {};
+
+  for (let i = 0; i < footprints.length; i++) {
+    let ownerId = footprints[i].ownerId || "unknown";
+
+    if (!ownerToIndices[ownerId]) {
+      ownerToIndices[ownerId] = [];
+    }
+
+    ownerToIndices[ownerId].push(i);
+
+    // 只保留最后两个索引，避免数组无限变长
+    if (ownerToIndices[ownerId].length > 2) {
+      ownerToIndices[ownerId].shift();
+    }
+  }
+
+  for (let ownerId in ownerToIndices) {
+    for (let idx of ownerToIndices[ownerId]) {
+      lastTwoIndexSet.add(idx);
+    }
+  }
+
+  // ② 再绘制和淡出
   for (let i = 0; i < footprints.length; i++) {
     let f = footprints[i];
     drawFootprint(f);
 
-    // 只保留最后两只脚印不消失
-    if (i < footprints.length - 2) {
-      f.alpha -= 2;
+    if (!lastTwoIndexSet.has(i)) {
+      f.alpha -= 3;
     }
   }
 
-  // 把看不见的脚印清掉
-  // footprints = footprints.filter(f => f.alpha > 0);
-
-  footprints = footprints.filter(f => f.alpha > 0 || f.isCurrent);
+  // ③ 清理看不见的脚印
+  footprints = footprints.filter(f => f.alpha > 0);
 
   if (footprints.length > MAX_FOOTPRINTS) {
     footprints.splice(0, footprints.length - MAX_FOOTPRINTS);
@@ -167,7 +201,8 @@ function makeStep(dx, dy) {
     // alpha: 255,
     // isCurrent: true,
     rotOffset: rotOffset,
-    alpha: 255
+    alpha: 255,
+    ownerId: socket.id
   };
 
   // // 3️⃣ 存脚印
