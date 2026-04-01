@@ -74,7 +74,7 @@ socket.on("step", (data) => {
     rightFoot: data.rightFoot,
     rotOffset: data.rotOffset || 0,
     alpha: 255,
-    isCurrent: false
+    // isCurrent: false
   });
 });
 
@@ -116,21 +116,31 @@ function draw() {
     lastStepTime=millis();
   }
 
-  for (let f of footprints) {
+  // for (let f of footprints) {
+  //   drawFootprint(f);
+  //   if (!f.isCurrent) {
+  //     f.alpha -= 2; // ❄️ 被雪覆盖⭐ 消失速度，调这个
+  //   }
+  // }
+
+  for (let i = 0; i < footprints.length; i++) {
+    let f = footprints[i];
     drawFootprint(f);
-    if (!f.isCurrent) {
-      f.alpha -= 2; // ❄️ 被雪覆盖⭐ 消失速度，调这个
+
+    // 只保留最后两只脚印不消失
+    if (i < footprints.length - 2) {
+      f.alpha -= 2;
     }
   }
 
   // 把看不见的脚印清掉
   // footprints = footprints.filter(f => f.alpha > 0);
 
-footprints = footprints.filter(f => f.alpha > 0 || f.isCurrent);
+  footprints = footprints.filter(f => f.alpha > 0 || f.isCurrent);
 
-if (footprints.length > MAX_FOOTPRINTS) {
-  footprints.splice(0, footprints.length - MAX_FOOTPRINTS);
-}
+  if (footprints.length > MAX_FOOTPRINTS) {
+    footprints.splice(0, footprints.length - MAX_FOOTPRINTS);
+  }
 
   // ---------- ④ Debug UI ----------
   // drawDebug();
@@ -156,15 +166,18 @@ function makeStep(dx, dy) {
     rightFoot: rightFoot,
     // alpha: 255,
     // isCurrent: true,
-    rotOffset: rotOffset
+    rotOffset: rotOffset,
+    alpha: 255
   };
 
-  // 3️⃣ 存脚印
-  footprints.push({
-    ...stepData,
-    alpha: 255,
-    isCurrent: true
-  });
+  // // 3️⃣ 存脚印
+  // footprints.push({
+  //   ...stepData,
+  //   alpha: 255,
+  //   // isCurrent: true
+  // });
+
+  footprints.push(stepData);
   
   socket.emit("step",stepData);
 
@@ -173,10 +186,10 @@ function makeStep(dx, dy) {
   //   f.isCurrent = false;
   // }
 
-  // 先全部取消 current
-  for (let f of footprints) {
-    f.isCurrent = false;
-  }
+  // // 先全部取消 current
+  // for (let f of footprints) {
+  //   f.isCurrent = false;
+  // }
 
   // 4️⃣ 切换左右脚
   rightFoot = !rightFoot;
