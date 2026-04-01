@@ -1,3 +1,23 @@
+/* 
+------------------------------------------------------ 
+Sketch 02 – Footsteps 
+Author: Haiyi Xiao 
+Date: Feb 2026 
+ 
+Description: 
+This sketch visualizes 雪地中的脚步 
+ 
+How to Use: 
+- 在移动端设备打开链接：https://footsteps-9ydb.onrender.com
+- 倾斜设备控制脚步行走
+ 
+Acknowledgements: 
+Inspired by 
+------------------------------------------------------ 
+*/
+
+
+
 let socket;
 
 //global variables
@@ -106,6 +126,10 @@ function draw() {
     cX += -1;
   }
 
+  let margin = 20;
+  cX = constrain(cX, margin, width - margin);
+  cY = constrain(cY, margin, height - margin);
+
   // ---------- ② 计算位移 ----------
   let dx = cX - curx;
   let dy = cY - cury;
@@ -184,6 +208,10 @@ function makeStep(dx, dy) {
   // 1️⃣ 更新“当前脚印参考位置”
   curx += dx;
   cury += dy;
+
+  let margin = 20;
+  curx = constrain(curx, margin, width - margin);
+  cury = constrain(cury, margin, height - margin);
 
   // 2️⃣ 方向
   // let angle = atan2(dy, dx);
