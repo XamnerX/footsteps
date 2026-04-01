@@ -165,10 +165,7 @@ function makeStep(dx, dy) {
 
   // 3️⃣ 存脚印
   footprints.push({
-    x: curx,
-    y: cury,
-    angle: angle,
-    rightFoot: rightFoot,
+    ...stepData,
     alpha: 255,
     isCurrent: true
   });
@@ -192,7 +189,7 @@ function drawFootprint(f) {
 
   push();
   translate(f.x, f.y);
-  rotate(f.angle+ f.rotOffset);
+  rotate(f.angle + (f.rotOffset || 0));
   rotate(90);
 
   translate(offset, 0);
