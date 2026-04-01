@@ -1,17 +1,27 @@
+/*
+Sketch 02 – Footsteps
+Author: Haiyi Xiao
+Date: Feb 2026
+
+A mobile-based interactive sketch where participants tilt their devices
+to generate shared footprints on a snowy ground.
+*/
+
 let socket;
 let permissionButton;
 
-// Device orientation values
+// Device orientation values from the browser sensor API
 let frontToBack = 0; // beta
 let leftToRight = 0; // gamma
 
-// Current target position and current footprint position
+// Target position follows the tilt input;
+// current position is the latest footprint location
 let targetX;
 let targetY;
 let currentX;
 let currentY;
 
-// Footstep settings
+// Footstep state
 let stepDistance = 15;
 let rightFoot = true;
 let footprints = [];
@@ -56,6 +66,8 @@ function draw() {
    Setup
 -------------------------------------------------- */
 
+// Some devices (especially iOS) require the user to explicitly
+// grant permission before motion/orientation data can be accessed.
 function setupMotionPermission() {
   const needsPermission =
     typeof DeviceMotionEvent.requestPermission === "function" &&
@@ -69,6 +81,9 @@ function setupMotionPermission() {
   }
 }
 
+// Listen for incoming footsteps from other connected users.
+// Positions are stored as normalized coordinates so that the same
+// relative location can be displayed on different screen sizes.
 function setupSocketEvents() {
   socket.on("step", (data) => {
     footprints.push({
@@ -83,6 +98,7 @@ function setupSocketEvents() {
   });
 }
 
+// Enable the orientation sensor listener once permission is granted.
 function enableMotionListeners() {
   window.addEventListener("deviceorientation", deviceTurnedHandler, true);
 }
@@ -91,6 +107,9 @@ function enableMotionListeners() {
    Main update logic
 -------------------------------------------------- */
 
+// Convert tilt input into a moving target position.
+// The target can move around the screen, but is kept inside a margin
+// so footprints do not get clipped by the canvas edges.
 function updateTargetPositionFromTilt() {
   const tilt = getTiltInput();
   const moveX = tilt.x;
@@ -112,6 +131,9 @@ function updateTargetPositionFromTilt() {
   targetY = constrain(targetY, edgeMargin, height - edgeMargin);
 }
 
+// Compare the target position with the latest footprint position.
+// A new footprint is only created when the distance is large enough
+// and enough time has passed since the previous step.
 function updateFootsteps() {
   const dx = targetX - currentX;
   const dy = targetY - currentY;
@@ -123,6 +145,8 @@ function updateFootsteps() {
   }
 }
 
+// Draw every footprint, but only keep the latest two footprints
+// from each participant fully visible. Older ones gradually fade out.
 function drawAndFadeFootprints() {
   const lastTwoIndexSet = getLastTwoFootprintsPerOwner();
 
@@ -130,14 +154,13 @@ function drawAndFadeFootprints() {
     const footprint = footprints[i];
     drawFootprint(footprint);
 
-    // Keep the most recent two footprints for each user visible.
-    // Older footprints gradually fade out.
     if (!lastTwoIndexSet.has(i)) {
       footprint.alpha -= fadeSpeed;
     }
   }
 }
 
+// Remove invisible footprints and prevent the array from growing forever.
 function trimFootprints() {
   footprints = footprints.filter((footprint) => footprint.alpha > 0);
 
@@ -150,6 +173,10 @@ function trimFootprints() {
    Footstep logic
 -------------------------------------------------- */
 
+// Create one new footprint.
+// The footprint stores normalized coordinates (0–1 range) instead of
+// raw pixel coordinates, so the shared position can adapt to different
+// screen sizes across devices.
 function makeStep(dx, dy) {
   currentX += dx;
   currentY += dy;
@@ -157,7 +184,11 @@ function makeStep(dx, dy) {
   currentX = constrain(currentX, edgeMargin, width - edgeMargin);
   currentY = constrain(currentY, edgeMargin, height - edgeMargin);
 
+  // Calculate the direction of travel so the footprint rotates
+  // to match the current movement direction.
   const angle = degrees(Math.atan2(dy, dx));
+
+  // Add a small random rotation to make the footprints feel less rigid.
   const rotOffset = random(-10, 10);
 
   const stepData = {
@@ -173,9 +204,13 @@ function makeStep(dx, dy) {
   footprints.push(stepData);
   socket.emit("step", stepData);
 
+  // Alternate between left and right footprints.
   rightFoot = !rightFoot;
 }
 
+// Find the indices of the most recent two footprints for each user.
+// This is used so each participant always keeps their latest pair visible,
+// while older traces fade away.
 function getLastTwoFootprintsPerOwner() {
   const ownerToIndices = {};
   const lastTwoIndexSet = new Set();
@@ -189,6 +224,7 @@ function getLastTwoFootprintsPerOwner() {
 
     ownerToIndices[ownerId].push(i);
 
+    // Only keep the latest two indices for each owner.
     if (ownerToIndices[ownerId].length > 2) {
       ownerToIndices[ownerId].shift();
     }
@@ -207,26 +243,30 @@ function getLastTwoFootprintsPerOwner() {
    Drawing
 -------------------------------------------------- */
 
+// Draw a single footprint shape.
+// The footprint position is converted from normalized coordinates
+// back into local pixel coordinates for the current device.
 function drawFootprint(footprint) {
   const offset = footprint.rightFoot ? -3 : 3;
 
-  // Convert normalized coordinates back into local screen space.
-  // This keeps positions consistent across different screen sizes.
   const px = footprint.nx * width;
   const py = footprint.ny * height;
 
   push();
   translate(px, py);
+
+  // Apply the movement direction plus a small random variation.
   rotate(footprint.angle + (footprint.rotOffset || 0));
   rotate(90);
+
+  // Shift left/right so alternating footprints do not overlap exactly.
   translate(offset, 0);
 
   if (!footprint.rightFoot) {
     scale(-1, 1);
   }
 
-  // Footprint size stays fixed.
-  // Only position is normalized across devices.
+  // Footprint size stays fixed; only position is normalized.
   scale(0.4);
   noStroke();
   fill(170, 187, 237, footprint.alpha);
@@ -247,6 +287,8 @@ function drawFootprint(footprint) {
    Motion input
 -------------------------------------------------- */
 
+// On iOS, permission requests for motion/orientation data
+// must be triggered by a user interaction such as a button press.
 function handlePermissionButtonPressed() {
   DeviceMotionEvent.requestPermission()
     .then((response) => {
@@ -262,11 +304,14 @@ function handlePermissionButtonPressed() {
     .catch(console.error);
 }
 
+// Update the latest sensor values from the browser orientation event.
 function deviceTurnedHandler(event) {
   frontToBack = event.beta;
   leftToRight = event.gamma;
 }
 
+// Detect iOS / iPadOS devices because their orientation behaviour
+// can differ from Android devices and often needs extra correction.
 function isIOSLike() {
   return (
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -274,6 +319,10 @@ function isIOSLike() {
   );
 }
 
+// Convert raw sensor input into a corrected movement direction.
+// This function handles:
+// 1. screen rotation (portrait / landscape)
+// 2. iOS-specific orientation differences
 function getTiltInput() {
   const x = leftToRight;
   const y = frontToBack;
@@ -288,7 +337,7 @@ function getTiltInput() {
 
   let result;
 
-  // Correct the input according to the current screen orientation.
+  // Remap the sensor axes depending on the current screen orientation.
   if (screenAngle === 90) {
     result = { x: -y, y: x };
   } else if (screenAngle === -90 || screenAngle === 270) {
@@ -299,7 +348,7 @@ function getTiltInput() {
     result = { x, y };
   }
 
-  // Additional correction for iOS / iPadOS devices.
+  // Apply an additional correction for iOS / iPadOS devices.
   if (isIOSLike()) {
     result = {
       x: result.y,
@@ -314,6 +363,7 @@ function getTiltInput() {
    Responsive canvas
 -------------------------------------------------- */
 
+// Keep positions valid when the browser window or device orientation changes.
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
 
